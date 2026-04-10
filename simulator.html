@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SBTI 人格概率模拟器</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6faf6;
+      --panel: #ffffff;
+      --text: #1e2a22;
+      --muted: #6a786f;
+      --line: #dbe8dd;
+      --accent: #4d6a53;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    header h1 {
+      font-size: 28px;
+      letter-spacing: -0.02em;
+    }
+    header p {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 6px;
+    }
+    .controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .controls button {
+      border: 0;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+      padding: 10px 20px;
+      border-radius: 12px;
+      transition: transform .15s, opacity .15s;
+    }
+    .controls button:hover { transform: translateY(-1px); }
+    .controls button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn-go {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-stop {
+      background: #c0392b;
+      color: #fff;
+    }
+    .btn-reset {
+      background: #fff;
+      color: var(--accent);
+      border: 1px solid var(--line) !important;
+    }
+    .controls label {
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .controls select, .controls input {
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      font: inherit;
+      font-size: 14px;
+      background: #fff;
+    }
+    .stats-bar {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .stats-bar strong {
+      color: var(--text);
+      font-size: 18px;
+    }
+    .chart-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 24px rgba(47,73,55,0.06);
+    }
+    .chart-box {
+      width: 100%;
+      height: 480px;
+    }
+    .table-wrap {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }
+    th {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      background: var(--panel);
+    }
+    td:nth-child(3), td:nth-child(4) {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    tr:hover td { background: #f8fcf9; }
+    .rank-1 td { font-weight: 700; }
+    .pct-bar {
+      display: inline-block;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #97b59c, #5b7a62);
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <h1>SBTI 人格概率模拟器</h1>
+    <p>随机模拟答题，实时统计各人格出现概率</p>
+  </header>
+
+  <div class="controls">
+    <label>速度：</label>
+    <select id="speed">
+      <option value="100">100 次/批</option>
+      <option value="1000" selected>1,000 次/批</option>
+      <option value="10000">10,000 次/批</option>
+      <option value="100000">100,000 次/批</option>
+    </select>
+    <button class="btn-go" id="btnStart">开始模拟</button>
+    <button class="btn-stop" id="btnStop" disabled>暂停</button>
+    <button class="btn-reset" id="btnReset">重置</button>
+    <button class="btn-go" id="btnExport" style="background:#2c3e50;">导出数据</button>
+  </div>
+
+  <div class="stats-bar">
+    <div>总模拟次数：<strong id="totalCount">0</strong></div>
+    <div>模拟速度：<strong id="speedDisplay">-</strong> 次/秒</div>
+    <div>耗时：<strong id="elapsed">0.0s</strong></div>
+  </div>
+
+  <div class="chart-card">
+    <div id="barChart" class="chart-box"></div>
+  </div>
+
+  <div class="chart-card">
+    <div id="pieChart" class="chart-box"></div>
+  </div>
+
+  <div class="chart-card">
+    <h3 style="margin-bottom:12px; font-size:16px;">详细数据</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>排名</th><th>人格类型</th><th>次数</th><th>概率</th><th>分布</th></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 测试数据 ──
+const questions = [
+  {dim:'S1',v:[1,2,3]},{dim:'S1',v:[1,2,3]},
+  {dim:'S2',v:[1,2,3]},{dim:'S2',v:[1,2,3]},
+  {dim:'S3',v:[1,2,3]},{dim:'S3',v:[1,2,3]},
+  {dim:'E1',v:[1,2,3]},{dim:'E1',v:[1,2,3]},
+  {dim:'E2',v:[1,2,3]},{dim:'E2',v:[1,2,3]},
+  {dim:'E3',v:[1,2,3]},{dim:'E3',v:[1,2,3]},
+  {dim:'A1',v:[3,2,1]},{dim:'A1',v:[1,2,3]},
+  {dim:'A2',v:[1,2,3]},{dim:'A2',v:[1,2,3]},
+  {dim:'A3',v:[1,2,3]},{dim:'A3',v:[1,2,3]},
+  {dim:'Ac1',v:[1,2,3]},{dim:'Ac1',v:[1,2,3]},
+  {dim:'Ac2',v:[1,2,3]},{dim:'Ac2',v:[1,2,3]},
+  {dim:'Ac3',v:[1,2,3]},{dim:'Ac3',v:[1,2,3]},
+  {dim:'So1',v:[1,2,3]},{dim:'So1',v:[1,2,3]},
+  {dim:'So2',v:[1,2,3]},{dim:'So2',v:[1,2,3]},
+  {dim:'So3',v:[1,2,3]},{dim:'So3',v:[1,2,3]},
+];
+
+const TYPES = [
+  {code:"CTRL",    cn:"拿捏者", p:"HHH-HMH-MHH-HHH-MHM"},
+  {code:"ATM-er",  cn:"送钱者", p:"HHH-HHM-HHH-HMH-MHL"},
+  {code:"Dior-s",  cn:"屌丝",  p:"MHM-MMH-MHM-HMH-LHL"},
+  {code:"BOSS",    cn:"领导者", p:"HHH-HMH-MMH-HHH-LHL"},
+  {code:"THAN-K",  cn:"感恩者", p:"MHM-HMM-HHM-MMH-MHL"},
+  {code:"OH-NO",   cn:"惊慌者", p:"HHL-LMH-LHH-HHM-LHL"},
+  {code:"GOGO",    cn:"冲锋者", p:"HHM-HMH-MMH-HHH-MHM"},
+  {code:"SEXY",    cn:"媚惑者", p:"HMH-HHL-HMM-HMM-HLH"},
+  {code:"LOVE-R",  cn:"恋爱脑", p:"MLH-LHL-HLH-MLM-MLH"},
+  {code:"MUM",     cn:"唠叨者", p:"MMH-MHL-HMM-LMM-HLL"},
+  {code:"FAKE",    cn:"伪装者", p:"HLM-MML-MLM-MLM-HLH"},
+  {code:"OJBK",    cn:"佛系者", p:"MMH-MMM-HML-LMM-MML"},
+  {code:"MALO",    cn:"恶意者", p:"LLM-LLM-LLL-LLL-LLL"},
+  {code:"JOKE-R",  cn:"小丑",  p:"LMM-LMM-MLM-MLL-LMH"},
+  {code:"WOC",     cn:"完美者", p:"HHH-HHH-HHH-HHH-HHH"},
+  {code:"THIN-K",  cn:"思考者", p:"MHM-MMH-HHM-MHM-MLM"},
+  {code:"SHIT",    cn:"愤世者", p:"HMH-MML-LMH-HMH-MHH"},
+  {code:"ZZZZ",    cn:"装死者", p:"MLM-MMM-MLM-LLM-MML"},
+  {code:"POOR",    cn:"贫困者", p:"LMM-MLM-MLM-MLM-MML"},
+  {code:"MONK",    cn:"僧人",  p:"HHH-HMH-HHH-MHM-LMM"},
+  {code:"IMSB",    cn:"傻者",  p:"LLH-LHL-MLH-LLM-HMH"},
+  {code:"SOLO",    cn:"孤儿",  p:"HMH-MLM-MHM-MMM-LHM"},
+  {code:"FUCK",    cn:"草者",  p:"HLH-LLM-LLM-HMH-HMH"},
+  {code:"DEAD",    cn:"死者",  p:"LLM-LML-LLL-LLL-LML"},
+  {code:"IMFW",    cn:"废物",  p:"HHH-HHH-HMH-HHH-MHM"},
+];
+
+const dims = ['S1','S2','S3','E1','E2','E3','A1','A2','A3','Ac1','Ac2','Ac3','So1','So2','So3'];
+const LN = {L:1,M:2,H:3};
+
+// 预计算所有类型的数值向量
+const typeVectors = TYPES.map(t => t.p.replace(/-/g,'').split('').map(c => LN[c]));
+
+function sumToLevel(s) { return s <= 3 ? 1 : s === 4 ? 2 : 3; }
+
+// 单次模拟
+// drink_gate_q1 有 4 个选项（等概率），选 value=3（饮酒）才出现 q2
+// drink_gate_q2 有 2 个选项（等概率），选 value=2 触发 DRUNK
+// DRUNK 概率 = 1/4 * 1/2 = 12.5%
+function simulate() {
+  // 先判断 DRUNK 隐藏人格
+  const gate1 = (Math.random() * 4) | 0; // 0,1,2,3 → value 3 是"饮酒"
+  if (gate1 === 2) { // 选中"饮酒"，出现 q2
+    const gate2 = (Math.random() * 2) | 0; // 0 或 1
+    if (gate2 === 1) return 26; // DRUNK 触发，index 26
+  }
+
+  const raw = new Int8Array(15);
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    const idx = dims.indexOf(q.dim);
+    raw[idx] += q.v[(Math.random() * q.v.length) | 0];
+  }
+  const uv = new Int8Array(15);
+  for (let i = 0; i < 15; i++) uv[i] = sumToLevel(raw[i]);
+
+  let bestIdx = 0, bestDist = 999, bestExact = -1;
+  for (let t = 0; t < typeVectors.length; t++) {
+    const tv = typeVectors[t];
+    let dist = 0, exact = 0;
+    for (let i = 0; i < 15; i++) {
+      const d = uv[i] - tv[i];
+      dist += d < 0 ? -d : d;
+      if (d === 0) exact++;
+    }
+    if (dist < bestDist || (dist === bestDist && exact > bestExact)) {
+      bestIdx = t;
+      bestDist = dist;
+      bestExact = exact;
+    }
+  }
+
+  const sim = Math.max(0, Math.round((1 - bestDist / 30) * 100));
+  return sim < 60 ? 25 : bestIdx; // 25 = HHHH index
+}
+
+// ── 状态 ──
+// 0-24: 25个常规人格, 25: HHHH, 26: DRUNK
+const allTypes = [
+  ...TYPES.map(t => ({code: t.code, cn: t.cn})),
+  {code: 'HHHH', cn: '傻乐者'},
+  {code: 'DRUNK', cn: '酒鬼'}
+];
+let counts = new Int32Array(27);
+let total = 0;
+let running = false;
+let timer = null;
+let startTime = 0;
+let accTime = 0;
+
+// ── ECharts ──
+const barChart = echarts.init(document.getElementById('barChart'));
+const pieChart = echarts.init(document.getElementById('pieChart'));
+
+function getSorted() {
+  const arr = allTypes.map((t, i) => ({...t, count: counts[i], pct: total ? counts[i]/total*100 : 0}));
+  arr.sort((a, b) => b.count - a.count);
+  return arr;
+}
+
+function updateCharts() {
+  const sorted = getSorted();
+  const elapsed = accTime + (running ? (Date.now() - startTime) / 1000 : 0);
+  const speed = elapsed > 0 ? Math.round(total / elapsed) : 0;
+
+  document.getElementById('totalCount').textContent = total.toLocaleString();
+  document.getElementById('speedDisplay').textContent = speed.toLocaleString();
+  document.getElementById('elapsed').textContent = elapsed.toFixed(1) + 's';
+
+  // Bar chart
+  barChart.setOption({
+    title: { text: '人格出现次数排行', left: 'center', textStyle: { fontSize: 16, color: '#1e2a22' } },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: params => {
+        const d = params[0];
+        return `<b>${d.name}</b><br/>次数: ${d.value.toLocaleString()}<br/>概率: ${(total ? d.value/total*100 : 0).toFixed(2)}%`;
+      }
+    },
+    grid: { left: 100, right: 40, top: 50, bottom: 30 },
+    xAxis: { type: 'value' },
+    yAxis: {
+      type: 'category',
+      data: sorted.map(t => `${t.code} ${t.cn}`).reverse(),
+      axisLabel: { fontSize: 12 }
+    },
+    series: [{
+      type: 'bar',
+      data: sorted.map(t => t.count).reverse(),
+      itemStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+          { offset: 0, color: '#97b59c' },
+          { offset: 1, color: '#4d6a53' }
+        ]),
+        borderRadius: [0, 6, 6, 0]
+      },
+      barMaxWidth: 24,
+      animationDuration: 300,
+      animationDurationUpdate: 300
+    }]
+  });
+
+  // Pie chart — top 10
+  const top10 = sorted.slice(0, 10);
+  const othersCount = sorted.slice(10).reduce((s, t) => s + t.count, 0);
+  const pieData = top10.map(t => ({ name: `${t.code} ${t.cn}`, value: t.count }));
+  if (othersCount > 0) pieData.push({ name: '其他', value: othersCount });
+
+  pieChart.setOption({
+    title: { text: '概率分布（Top 10）', left: 'center', textStyle: { fontSize: 16, color: '#1e2a22' } },
+    tooltip: {
+      formatter: p => `<b>${p.name}</b><br/>次数: ${p.value.toLocaleString()}<br/>占比: ${p.percent}%`
+    },
+    color: ['#4d6a53','#5b7a62','#6c8d71','#7fa586','#97b59c','#a8c4ac','#b8d0bc','#c8dccc','#d8e8dc','#e8f0ea','#ccc'],
+    series: [{
+      type: 'pie',
+      radius: ['35%', '70%'],
+      center: ['50%', '55%'],
+      label: { formatter: '{b}\n{d}%', fontSize: 11 },
+      data: pieData,
+      animationDuration: 300,
+      animationDurationUpdate: 300
+    }]
+  });
+
+  // Table
+  const tbody = document.getElementById('tableBody');
+  const maxPct = sorted[0]?.pct || 1;
+  tbody.innerHTML = sorted.map((t, i) => `
+    <tr class="${i === 0 ? 'rank-1' : ''}">
+      <td>${i + 1}</td>
+      <td>${t.code}（${t.cn}）</td>
+      <td>${t.count.toLocaleString()}</td>
+      <td>${t.pct.toFixed(3)}%</td>
+      <td><span class="pct-bar" style="width:${(t.pct / maxPct * 160)}px"></span></td>
+    </tr>
+  `).join('');
+}
+
+// ── 控制 ──
+function runBatch() {
+  const batchSize = Number(document.getElementById('speed').value);
+  for (let i = 0; i < batchSize; i++) {
+    counts[simulate()]++;
+  }
+  total += batchSize;
+  updateCharts();
+  if (running) timer = requestAnimationFrame(runBatch);
+}
+
+document.getElementById('btnStart').addEventListener('click', () => {
+  if (running) return;
+  running = true;
+  startTime = Date.now();
+  document.getElementById('btnStart').disabled = true;
+  document.getElementById('btnStop').disabled = false;
+  timer = requestAnimationFrame(runBatch);
+});
+
+document.getElementById('btnStop').addEventListener('click', () => {
+  running = false;
+  accTime += (Date.now() - startTime) / 1000;
+  cancelAnimationFrame(timer);
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStop').disabled = true;
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  running = false;
+  cancelAnimationFrame(timer);
+  counts = new Int32Array(27);
+  total = 0;
+  accTime = 0;
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStop').disabled = true;
+  updateCharts();
+});
+
+document.getElementById('btnExport').addEventListener('click', () => {
+  const sorted = getSorted();
+  const data = {
+    total,
+    timestamp: new Date().toISOString(),
+    results: sorted.map((t, i) => ({
+      rank: i + 1,
+      code: t.code,
+      cn: t.cn,
+      count: t.count,
+      probability: +(t.pct.toFixed(4))
+    }))
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `sbti-simulation-${total}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+window.addEventListener('resize', () => {
+  barChart.resize();
+  pieChart.resize();
+});
+
+updateCharts();
+</script>
+</body>
+</html>
