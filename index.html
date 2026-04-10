@@ -855,8 +855,42 @@
       padding: 4px 0;
     }
     @media (max-width: 600px) {
-      .trend-list { flex-direction: column; }
-      .trend-item { min-width: auto; }
+      .trend-panel {
+        padding: 10px 12px;
+        border-radius: 14px;
+        bottom: 8px;
+      }
+      .trend-panel.collapsed .trend-list { display: none; }
+      .trend-panel.collapsed { padding: 8px 12px; }
+      .trend-header { margin-bottom: 6px; }
+      .trend-panel.collapsed .trend-header { margin-bottom: 0; }
+      .trend-list { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; gap: 6px; }
+      .trend-item { min-width: 90px; flex: 0 0 auto; padding: 6px 8px; border-radius: 10px; }
+      .trend-item-code { font-size: 14px; }
+      .trend-item-cn { font-size: 11px; }
+      .trend-item-bar { margin-top: 4px; height: 4px; }
+      .trend-item-rank { font-size: 10px; margin-bottom: 2px; }
+      .trend-item-pct { font-size: 10px; margin-top: 2px; }
+      .trend-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        color: var(--muted);
+        cursor: pointer;
+        user-select: none;
+      }
+      .trend-toggle::after {
+        content: '▲';
+        font-size: 9px;
+        transition: transform .2s ease;
+      }
+      .trend-panel.collapsed .trend-toggle::after {
+        content: '▼';
+      }
+    }
+    @media (min-width: 601px) {
+      .trend-toggle { display: none; }
     }
   </style>
 </head>
@@ -881,6 +915,7 @@
               <span>趋势预测</span>
             </div>
             <div class="trend-confidence" id="trendConfidence"></div>
+            <span class="trend-toggle" id="trendToggle">收起</span>
           </div>
           <div id="trendBody"></div>
         </div>
@@ -953,6 +988,10 @@
       原作者：<a href="https://space.bilibili.com/417038183" target="_blank">B站@蛆肉儿串儿</a>
       &nbsp;·&nbsp;
       <a href="https://www.bilibili.com/video/BV1LpDHByET6/" target="_blank">原视频</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/juryory/sbti-godmod" target="_blank">GitHub</a>
+      &nbsp;·&nbsp;
+      <a href="simulator.html" target="_blank">概率模拟器</a>
     </div>
     <div class="footer-disclaimer">
       本项目为金手指改造版，所有测试题目、人格类型及描述文案的版权归原作者所有。
@@ -1776,6 +1815,16 @@
       const trendPanel = document.getElementById('trendPanel');
       const trendBody = document.getElementById('trendBody');
       const trendConfidence = document.getElementById('trendConfidence');
+
+      // 手机端趋势面板折叠切换
+      if (!trendPanel._toggleBound) {
+        const trendToggle = document.getElementById('trendToggle');
+        trendToggle.addEventListener('click', () => {
+          const collapsed = trendPanel.classList.toggle('collapsed');
+          trendToggle.textContent = collapsed ? '展开' : '收起';
+        });
+        trendPanel._toggleBound = true;
+      }
 
       // 统计已回答的常规题数（不含 special 题）
       const answeredRegular = questions.filter(q => app.answers[q.id] !== undefined);
